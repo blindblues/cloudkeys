@@ -1,0 +1,34 @@
+# File eseguibili
+*.exe
+*.dll
+*.so
+*.dylib
+
+# File temporanei
+*.tmp
+*.temp
+*.log
+
+# File di compilazione
+*.obj
+*.o
+*.a
+*.lib
+
+# File di sistema
+Thumbs.db
+.DS_Store
+
+# Directory di build
+build/
+dist/
+out/
+
+# IDE
+.vscode/
+*.swp
+*.swo
+
+# Backup
+*.bak
+*.backup
