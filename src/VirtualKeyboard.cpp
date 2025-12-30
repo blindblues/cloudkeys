@@ -163,7 +163,7 @@ bool VirtualKeyboard::Create() {
     wc.lpfnWndProc = WindowProc;
     wc.hInstance = m_hInstance;
     wc.lpszClassName = CLASS_NAME;
-    wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
+    wc.hbrBackground = NULL;
     wc.hCursor = LoadCursor(NULL, IDC_ARROW);
     wc.hIcon = LoadIcon(NULL, IDI_APPLICATION);
     
@@ -172,7 +172,7 @@ bool VirtualKeyboard::Create() {
     }
     
     m_hwnd = CreateWindowExW(
-        WS_EX_TOPMOST | WS_EX_NOACTIVATE,
+        WS_EX_TOPMOST | WS_EX_NOACTIVATE | WS_EX_LAYERED,
         CLASS_NAME,
         L"CloudKeys",
         WS_OVERLAPPEDWINDOW & ~WS_MAXIMIZEBOX,
@@ -185,6 +185,9 @@ bool VirtualKeyboard::Create() {
     
     // Abilita ClearType per migliore rendering del testo
     if (m_hwnd) {
+        // Imposta la finestra trasparente all'80%
+        SetLayeredWindowAttributes(m_hwnd, RGB(0, 0, 0), 204, LWA_ALPHA);
+        
         HDC hdc = GetDC(m_hwnd);
         SetGraphicsMode(hdc, GM_ADVANCED);
         SetBkMode(hdc, TRANSPARENT);
@@ -276,8 +279,8 @@ void VirtualKeyboard::OnPaint() {
     HBITMAP memBitmap = CreateCompatibleBitmap(hdc, width, height);
     HBITMAP oldBitmap = (HBITMAP)SelectObject(memDC, memBitmap);
     
-    // Pulisci il background
-    HBRUSH bgBrush = CreateSolidBrush(RGB(240, 240, 240));
+    // Pulisci il background con blu scuro trasparente
+    HBRUSH bgBrush = CreateSolidBrush(RGB(20, 40, 80));
     FillRect(memDC, &clientRect, bgBrush);
     DeleteObject(bgBrush);
     
@@ -324,8 +327,8 @@ void VirtualKeyboard::OnPaint() {
             // Colore per indicare che Shift è attivo
             hBrush = CreateSolidBrush(RGB(255, 255, 200));
         } else {
-            // Colore normale
-            hBrush = CreateSolidBrush(RGB(240, 240, 240));
+            // Colore normale per contrastare con lo sfondo blu scuro
+            hBrush = CreateSolidBrush(RGB(200, 200, 220));
         }
         
         FillRect(memDC, &key.rect, hBrush);

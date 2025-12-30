@@ -1,12 +1,12 @@
 @echo off
-echo Compilazione della tastiera virtuale italiana...
+echo Compilazione di CloudKeys - Tastiera Virtuale...
 echo.
 
 echo Impostazione PATH per MinGW...
 set PATH=%PATH%;C:\mingw\mingw64\bin
 
 echo Compilazione con g++...
-g++ -o keyboard.exe src/main.cpp src/VirtualKeyboard.cpp -Iinclude -lgdi32 -luser32 -municode -static -mwindows
+g++ -o CloudKeys.exe src/main.cpp src/VirtualKeyboard.cpp -Iinclude -lgdi32 -luser32 -municode -static -mwindows
 
 if %ERRORLEVEL% EQU 0 (
     echo.
@@ -14,9 +14,9 @@ if %ERRORLEVEL% EQU 0 (
     echo COMPILAZIONE COMPLETATA CON SUCCESSO!
     echo ========================================
     echo.
-    echo Avvio della tastiera virtuale...
+    echo Avvio di CloudKeys...
     echo.
-    start keyboard.exe
+    start CloudKeys.exe
 ) else (
     echo.
     echo ========================================
