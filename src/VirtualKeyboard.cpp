@@ -172,7 +172,7 @@ bool VirtualKeyboard::Create() {
     }
     
     m_hwnd = CreateWindowExW(
-        WS_EX_TOPMOST | WS_EX_NOACTIVATE | WS_EX_LAYERED,
+        WS_EX_TOPMOST | WS_EX_NOACTIVATE,
         CLASS_NAME,
         L"CloudKeys",
         WS_OVERLAPPEDWINDOW & ~WS_MAXIMIZEBOX,
@@ -185,9 +185,6 @@ bool VirtualKeyboard::Create() {
     
     // Abilita ClearType per migliore rendering del testo
     if (m_hwnd) {
-        // Imposta la finestra trasparente all'80%
-        SetLayeredWindowAttributes(m_hwnd, RGB(0, 0, 0), 204, LWA_ALPHA);
-        
         HDC hdc = GetDC(m_hwnd);
         SetGraphicsMode(hdc, GM_ADVANCED);
         SetBkMode(hdc, TRANSPARENT);
