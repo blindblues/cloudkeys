@@ -16,6 +16,19 @@ private:
     // Font personalizzato
     HFONT m_customFont;
     
+    // Glassmorphism effects
+    void DrawGlassBackground(HDC hdc, const RECT& rect);
+    void DrawGlassKey(HDC hdc, const KeyButton& key);
+    void CreateGlassEffect(HDC hdc, const RECT& rect, COLORREF baseColor, float transparency);
+    void DrawGlassBorder(HDC hdc, const RECT& rect);
+    void DrawGlassReflection(HDC hdc, const RECT& rect);
+    
+    // Hover animation
+    int m_hoverKeyIndex;
+    float m_hoverAnimation;
+    void UpdateHoverAnimation();
+    bool IsPointOverKey(int xPos, int yPos, int& keyIndex);
+    
     // Layout tastiera italiana
     void InitializeKeys();
     void CreateKey(int x, int y, int width, int height, const std::wstring& label, const std::wstring& shiftLabel, WORD keyCode);

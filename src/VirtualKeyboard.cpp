@@ -14,7 +14,7 @@ VirtualKeyboard* VirtualKeyboard::s_instance = nullptr;
 const wchar_t* VirtualKeyboard::CLASS_NAME = L"VirtualKeyboardWindowClass";
 
 VirtualKeyboard::VirtualKeyboard(HINSTANCE hInstance) 
-    : m_hInstance(hInstance), m_hwnd(nullptr), m_customFont(nullptr) {
+    : m_hInstance(hInstance), m_hwnd(nullptr), m_customFont(nullptr), m_hoverKeyIndex(-1), m_hoverAnimation(0.0f) {
     s_instance = this;
     LoadCustomFont();
     InitializeKeys();
@@ -235,6 +235,18 @@ LRESULT VirtualKeyboard::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam) 
             if (wParam == 1) {
                 // Timer per controllare lo stato dei tasti fisici
                 CheckPhysicalKeyboardState();
+                
+                // Update hover animation
+                bool wasAnimating = (m_hoverAnimation > 0.0f && m_hoverAnimation < 1.0f) || 
+                                  (m_hoverKeyIndex >= 0 && m_hoverAnimation < 1.0f) ||
+                                  (m_hoverKeyIndex < 0 && m_hoverAnimation > 0.0f);
+                
+                UpdateHoverAnimation();
+                
+                // Redraw if animation is active
+                if (wasAnimating || (m_hoverAnimation > 0.0f && m_hoverAnimation < 1.0f)) {
+                    InvalidateRect(m_hwnd, NULL, FALSE);
+                }
             } else if (wParam == 2) {
                 // Timer per il ridimensionamento - forza il ridisegno finale
                 InvalidateRect(m_hwnd, NULL, TRUE); // TRUE per cancellare lo sfondo
@@ -276,10 +288,8 @@ void VirtualKeyboard::OnPaint() {
     HBITMAP memBitmap = CreateCompatibleBitmap(hdc, width, height);
     HBITMAP oldBitmap = (HBITMAP)SelectObject(memDC, memBitmap);
     
-    // Pulisci il background con blu scuro trasparente
-    HBRUSH bgBrush = CreateSolidBrush(RGB(20, 40, 80));
-    FillRect(memDC, &clientRect, bgBrush);
-    DeleteObject(bgBrush);
+    // Pulisci il background con effetto glassmorphism
+    DrawGlassBackground(memDC, clientRect);
     
     // Font responsive per i tasti - usa il font personalizzato se disponibile
     HFONT hFont;
@@ -310,52 +320,10 @@ void VirtualKeyboard::OnPaint() {
     }
     hOldFont = (HFONT)SelectObject(memDC, hFont);
     
-    // Disegna tutti i tasti sul DC in memoria
+    // Disegna tutti i tasti con effetto glassmorphism
+    UpdateHoverAnimation();
     for (auto& key : m_keys) {
-        // Colore del tasto con stati multipli
-        HBRUSH hBrush;
-        if (key.isToggled) {
-            // Colore viola per tasti toggle attivi (Caps Lock)
-            hBrush = CreateSolidBrush(RGB(150, 100, 200));
-        } else if (key.isPressed) {
-            // Colore vivace quando premuto
-            hBrush = CreateSolidBrush(RGB(100, 150, 255));
-        } else if (key.isShiftPressed) {
-            // Colore per indicare che Shift è attivo
-            hBrush = CreateSolidBrush(RGB(255, 255, 200));
-        } else {
-            // Colore normale per contrastare con lo sfondo blu scuro
-            hBrush = CreateSolidBrush(RGB(200, 200, 220));
-        }
-        
-        FillRect(memDC, &key.rect, hBrush);
-        DeleteObject(hBrush);
-        
-        // Bordo del tasto - solo un bordo alla volta
-        HPEN hPen;
-        if (key.isToggled) {
-            hPen = CreatePen(PS_SOLID, 3, RGB(100, 50, 150));
-        } else {
-            hPen = CreatePen(PS_SOLID, 1, RGB(0, 0, 0));
-        }
-        HPEN hOldPen = (HPEN)SelectObject(memDC, hPen);
-        Rectangle(memDC, key.rect.left, key.rect.top, key.rect.right, key.rect.bottom);
-        SelectObject(memDC, hOldPen);
-        DeleteObject(hPen);
-        
-        // Testo del tasto con colore contrastante e miglior rendering
-        if (key.isToggled || key.isPressed) {
-            SetTextColor(memDC, RGB(255, 255, 255));
-        } else {
-            SetTextColor(memDC, RGB(0, 0, 0));
-        }
-        SetBkMode(memDC, TRANSPARENT);
-        
-        std::wstring text = key.GetCurrentLabel();
-        RECT textRect = key.rect;
-        
-        // Disegna il testo perfettamente centrato orizzontalmente e verticalmente
-        DrawTextW(memDC, text.c_str(), -1, &textRect, DT_SINGLELINE | DT_CENTER | DT_VCENTER | DT_NOPREFIX);
+        DrawGlassKey(memDC, key);
     }
     
     // Copia il buffer in memoria sulla finestra
@@ -372,6 +340,205 @@ void VirtualKeyboard::OnPaint() {
     }
     
     EndPaint(m_hwnd, &ps);
+}
+
+// Glassmorphism effect implementations
+void VirtualKeyboard::DrawGlassBackground(HDC hdc, const RECT& rect) {
+    // Create gradient background with blur effect simulation
+    int width = rect.right - rect.left;
+    int height = rect.bottom - rect.top;
+    
+    // Create multiple layered rectangles for depth
+    for (int i = 5; i >= 0; i--) {
+        RECT layerRect = rect;
+        InflateRect(&layerRect, -i * 3, -i * 3);
+        
+        // Progressive transparency and color shift
+        int alpha = 15 + i * 8;
+        COLORREF layerColor = RGB(
+            20 + i * 5,    // Red component
+            40 + i * 8,    // Green component  
+            80 + i * 12     // Blue component
+        );
+        
+        HBRUSH layerBrush = CreateSolidBrush(layerColor);
+        FillRect(hdc, &layerRect, layerBrush);
+        DeleteObject(layerBrush);
+    }
+    
+    // Add subtle noise texture simulation with dots
+    for (int x = rect.left; x < rect.right; x += 4) {
+        for (int y = rect.top; y < rect.bottom; y += 4) {
+            if ((x + y) % 8 == 0) {
+                SetPixel(hdc, x, y, RGB(60, 80, 120));
+            }
+        }
+    }
+}
+
+void VirtualKeyboard::CreateGlassEffect(HDC hdc, const RECT& rect, COLORREF baseColor, float transparency) {
+    // Main glass surface with transparency
+    HBRUSH glassBrush = CreateSolidBrush(baseColor);
+    FillRect(hdc, &rect, glassBrush);
+    DeleteObject(glassBrush);
+    
+    // Add subtle gradient overlay
+    RECT gradientRect = rect;
+    gradientRect.bottom = gradientRect.top + (rect.bottom - rect.top) / 2;
+    
+    COLORREF gradientColor = RGB(
+        GetRValue(baseColor) + 30,
+        GetGValue(baseColor) + 30,
+        GetBValue(baseColor) + 40
+    );
+    
+    HBRUSH gradientBrush = CreateSolidBrush(gradientColor);
+    FillRect(hdc, &gradientRect, gradientBrush);
+    DeleteObject(gradientBrush);
+}
+
+void VirtualKeyboard::DrawGlassBorder(HDC hdc, const RECT& rect) {
+    // Outer bright border
+    HPEN brightPen = CreatePen(PS_SOLID, 1, RGB(255, 255, 255));
+    HPEN oldPen = (HPEN)SelectObject(hdc, brightPen);
+    
+    Rectangle(hdc, rect.left, rect.top, rect.right, rect.bottom);
+    
+    // Inner shadow border
+    HPEN shadowPen = CreatePen(PS_SOLID, 1, RGB(100, 100, 100));
+    SelectObject(hdc, shadowPen);
+    
+    RECT innerRect = rect;
+    InflateRect(&innerRect, -2, -2);
+    Rectangle(hdc, innerRect.left, innerRect.top, innerRect.right, innerRect.bottom);
+    
+    SelectObject(hdc, oldPen);
+    DeleteObject(brightPen);
+    DeleteObject(shadowPen);
+}
+
+void VirtualKeyboard::DrawGlassReflection(HDC hdc, const RECT& rect) {
+    // Top reflection strip
+    RECT reflectionRect = rect;
+    reflectionRect.bottom = reflectionRect.top + (rect.bottom - rect.top) / 4;
+    reflectionRect.left += 2;
+    reflectionRect.right -= 2;
+    
+    // Create gradient reflection
+    for (int i = 0; i < 5; i++) {
+        RECT stripRect = reflectionRect;
+        stripRect.top = reflectionRect.top + i * ((reflectionRect.bottom - reflectionRect.top) / 5);
+        stripRect.bottom = stripRect.top + ((reflectionRect.bottom - reflectionRect.top) / 5);
+        
+        // Simulate alpha with lighter colors
+        int lightness = 80 - i * 15;
+        COLORREF reflectionColor = RGB(
+            255,
+            255,
+            255 - (lightness / 2)
+        );
+        
+        HBRUSH reflectionBrush = CreateSolidBrush(reflectionColor);
+        FillRect(hdc, &stripRect, reflectionBrush);
+        DeleteObject(reflectionBrush);
+    }
+}
+
+void VirtualKeyboard::DrawGlassKey(HDC hdc, const KeyButton& key) {
+    // Determine base color based on key state
+    COLORREF baseColor;
+    bool isHovered = false;
+    
+    // Check if this is the hovered key
+    if (m_hoverKeyIndex >= 0 && &m_keys[m_hoverKeyIndex] == &key) {
+        isHovered = true;
+    }
+    
+    if (key.isToggled) {
+        baseColor = RGB(120, 80, 180);  // Purple for toggled
+    } else if (key.isPressed) {
+        baseColor = RGB(80, 130, 230);  // Blue for pressed
+    } else if (key.isShiftPressed) {
+        baseColor = RGB(230, 230, 180); // Yellow for shift
+    } else if (isHovered) {
+        // Enhanced glass effect for hover
+        int hoverIntensity = (int)(m_hoverAnimation * 50);
+        baseColor = RGB(220 + hoverIntensity, 220 + hoverIntensity, 240 + hoverIntensity);
+    } else {
+        baseColor = RGB(220, 220, 240); // Glass white for normal
+    }
+    
+    // Create glass effect for key
+    CreateGlassEffect(hdc, key.rect, baseColor, 0.7f);
+    
+    // Draw glass border
+    DrawGlassBorder(hdc, key.rect);
+    
+    // Add reflection
+    DrawGlassReflection(hdc, key.rect);
+    
+    // Add hover glow effect
+    if (isHovered && m_hoverAnimation > 0.0f) {
+        int glowAlpha = (int)(m_hoverAnimation * 100);
+        COLORREF glowColor = RGB(150, 180, 255);
+        
+        // Create glow border
+        HPEN glowPen = CreatePen(PS_SOLID, 2, glowColor);
+        HPEN oldPen = (HPEN)SelectObject(hdc, glowPen);
+        
+        RECT glowRect = key.rect;
+        InflateRect(&glowRect, 1, 1);
+        Rectangle(hdc, glowRect.left, glowRect.top, glowRect.right, glowRect.bottom);
+        
+        SelectObject(hdc, oldPen);
+        DeleteObject(glowPen);
+    }
+    
+    // Draw text with appropriate color
+    std::wstring text = key.GetCurrentLabel();
+    RECT textRect = key.rect;
+    
+    if (key.isToggled || key.isPressed) {
+        SetTextColor(hdc, RGB(255, 255, 255));
+    } else if (isHovered) {
+        SetTextColor(hdc, RGB(20, 40, 80));
+    } else {
+        SetTextColor(hdc, RGB(40, 40, 60));
+    }
+    SetBkMode(hdc, TRANSPARENT);
+    
+    DrawTextW(hdc, text.c_str(), -1, &textRect, DT_SINGLELINE | DT_CENTER | DT_VCENTER | DT_NOPREFIX);
+}
+
+// Hover animation implementations
+bool VirtualKeyboard::IsPointOverKey(int xPos, int yPos, int& keyIndex) {
+    for (size_t i = 0; i < m_keys.size(); i++) {
+        if (m_keys[i].ContainsPoint(xPos, yPos)) {
+            keyIndex = i;
+            return true;
+        }
+    }
+    keyIndex = -1;
+    return false;
+}
+
+void VirtualKeyboard::UpdateHoverAnimation() {
+    // Smooth animation transition
+    const float animationSpeed = 0.15f;
+    
+    if (m_hoverKeyIndex >= 0) {
+        // Animate to hover state
+        if (m_hoverAnimation < 1.0f) {
+            m_hoverAnimation += animationSpeed;
+            if (m_hoverAnimation > 1.0f) m_hoverAnimation = 1.0f;
+        }
+    } else {
+        // Animate back to normal state
+        if (m_hoverAnimation > 0.0f) {
+            m_hoverAnimation -= animationSpeed;
+            if (m_hoverAnimation < 0.0f) m_hoverAnimation = 0.0f;
+        }
+    }
 }
 
 void VirtualKeyboard::OnLButtonDown(int xPos, int yPos) {
@@ -667,6 +834,18 @@ void VirtualKeyboard::OnMouseMove(int xPos, int yPos) {
     SetCapture(m_hwnd);
     
     bool needsRedraw = false;
+    
+    // Check for hover state changes
+    int previousHoverKey = m_hoverKeyIndex;
+    int currentHoverKey = -1;
+    IsPointOverKey(xPos, yPos, currentHoverKey);
+    
+    if (previousHoverKey != currentHoverKey) {
+        m_hoverKeyIndex = currentHoverKey;
+        needsRedraw = true;
+    }
+    
+    // Handle button press states
     for (auto& key : m_keys) {
         bool wasPressed = key.isPressed;
         key.isPressed = key.ContainsPoint(xPos, yPos) && (GetKeyState(VK_LBUTTON) < 0);
